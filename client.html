@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>CamToWebRTC Stream (Audio/Video)</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: contain;
+        }
+    </style>
+</head>
+<body>
+    <video id="remoteVideo" autoplay playsinline controls muted></video>
+
+    <script>
+        const remoteVideo = document.getElementById('remoteVideo');
+        let pc; // PeerConnection
+        let ws; // WebSocket
+        let iceCandidateQueue = [];
+        let remoteStream = null; // Variable para mantener nuestro MediaStream local para los tracks remotos
+
+        function log(message) {
+            console.log(`[CLIENT] ${message}`);
+        }
+
+        function processIceCandidateQueue() {
+            while (iceCandidateQueue.length > 0) {
+                const candidateMsg = iceCandidateQueue.shift();
+                if (candidateMsg.candidate && pc && pc.remoteDescription && pc.remoteDescription.type) {
+                    log("Procesando candidato ICE de la cola...");
+                    pc.addIceCandidate(new RTCIceCandidate(candidateMsg.candidate))
+                        .then(() => log("Candidato ICE de la cola añadido."))
+                        .catch(e => log(`Error añadiendo candidato ICE de la cola: ${e.name} - ${e.message}`));
+                } else if (candidateMsg.candidate) {
+                    log("PC no listo para candidato de la cola, devolviendo a la cola.");
+                    iceCandidateQueue.unshift(candidateMsg); // Ponerlo de nuevo al principio si pc no está listo
+                    break;
+                }
+            }
+        }
+
+        function setupWebSocket() {
+            const wsURL = 'ws://' + window.location.host + '/ws';
+            log(`Conectando a WebSocket: ${wsURL}`);
+            ws = new WebSocket(wsURL);
+
+            ws.onopen = () => {
+                log("WebSocket Conectado. Creando oferta WebRTC...");
+                createPeerConnectionAndOffer();
+            };
+
+            ws.onmessage = async (event) => {
+                let msg;
+                try {
+                    if (!event.data) { log("WebSocket Mensaje Recibido: Datos vacíos."); return; }
+                    msg = JSON.parse(event.data);
+                } catch (e) {
+                    log(`Error parseando JSON del WebSocket: ${e}`);
+                    log(`Datos recibidos que causaron el error: ${event.data}`);
+                    return;
+                }
+                log(`WebSocket Mensaje Recibido (Tipo: ${msg.type})`);
+
+                if (msg.type === 'answer') {
+                    if (!msg.sdp || typeof msg.sdp.type !== 'string' || typeof msg.sdp.sdp !== 'string') {
+                        log("Respuesta SDP malformada recibida del servidor.");
+                        return;
+                    }
+                    log("Respuesta SDP recibida del servidor.");
+                    if (msg.sdp && msg.sdp.sdp) { // Loguear el SDP de la respuesta si está presente
+                        log(`[CLIENT RECEIVED SDP ANSWER]:\n${msg.sdp.sdp}`);
+                    }
+                    try {
+                        if (!pc) { log("Error: PeerConnection no está inicializado al recibir la respuesta."); return; }
+                        await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+                        log("RemoteDescription (answer) establecido exitosamente.");
+                        processIceCandidateQueue(); // Procesar candidatos encolados
+                    } catch (e) { log(`Error estableciendo RemoteDescription (answer): ${e.name} - ${e.message}`); }
+                } else if (msg.type === 'candidate') {
+                    if (msg.candidate) {
+                        if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+                            log("Añadiendo candidato ICE directamente.");
+                            pc.addIceCandidate(new RTCIceCandidate(msg.candidate))
+                                .catch(e => log(`Error añadiendo candidato ICE directo: ${e.name} - ${e.message}`));
+                        } else {
+                            log("Encolando candidato ICE (remoteDescription aún no está establecido o pc no existe).");
+                            iceCandidateQueue.push(msg);
+                        }
+                    } else { log("Mensaje de candidato ICE recibido pero sin payload de candidato."); }
+                } else { log(`Mensaje WebSocket de tipo desconocido: ${msg.type}`); }
+            };
+
+            ws.onerror = (errorEvent) => {
+                let errorMessage = "WebSocket Error";
+                if (typeof errorEvent === 'object' && errorEvent !== null) {
+                    if (errorEvent.message) errorMessage += `: ${errorEvent.message}`;
+                    else if (errorEvent.type) errorMessage += `: Type ${errorEvent.type}`;
+                } else if (typeof errorEvent === 'string') { errorMessage += `: ${errorEvent}`; }
+                log(errorMessage);
+            };
+
+            ws.onclose = (event) => {
+                log(`WebSocket Desconectado. Code: ${event.code}, Reason: '${event.reason}', WasClean: ${event.wasClean}`);
+                if (pc) { log("Cerrando PeerConnection debido a cierre de WebSocket."); pc.close(); pc = null; }
+                remoteStream = null; // Resetear el remoteStream
+            };
+        }
+
+        async function createPeerConnectionAndOffer() {
+            log("Creando PeerConnection...");
+            // Resetear remoteStream por si hay reconexiones
+            remoteStream = new MediaStream(); 
+            log(`Nuevo remoteStream inicializado (id: ${remoteStream.id})`);
+            // Asignar inmediatamente el stream vacío al video para que esté listo.
+            // Esto puede ayudar a que el navegador esté más preparado.
+            if (remoteVideo.srcObject !== remoteStream) {
+                log("Asignando remoteStream (inicialmente vacío) a remoteVideo.srcObject.");
+                remoteVideo.srcObject = remoteStream;
+            }
+
+
+            try {
+                pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+            } catch (e) {
+                log(`Error creando RTCPeerConnection: ${e.name} - ${e.message}`);
+                alert(`Error creando PeerConnection: ${e.message}. Tu navegador podría no soportar WebRTC.`);
+                return;
+            }
+
+            pc.onicecandidate = event => {
+                if (event.candidate) {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate.toJSON() }));
+                    } else { log("WebSocket no está abierto, no se puede enviar candidato ICE."); }
+                } else { log("Todos los candidatos ICE locales enviados o la recolección ha terminado."); }
+            };
+
+            // --- pc.ontrack REFACTORIZADO ---
+            pc.ontrack = (event) => {
+                console.log(`[CLIENT] RAW ONTRACK EVENT FIRED. Kind: ${event.track.kind}, ID: ${event.track.id}`);
+                log(`>>> INICIO pc.ontrack para ${event.track.kind} track (id: ${event.track.id}) <<<`);
+                log(`  Track Details: label='${event.track.label}', enabled=${event.track.enabled}, readyState=${event.track.readyState}, muted=${event.track.muted}`);
+
+                // remoteStream ya debería estar creado e incluso asignado a remoteVideo.srcObject
+                if (!remoteStream) {
+                    // Esto no debería ocurrir si createPeerConnectionAndOffer lo inicializó.
+                    log("  ADVERTENCIA: remoteStream es null en ontrack, creando uno nuevo. Esto es inesperado.");
+                    remoteStream = new MediaStream();
+                    if (remoteVideo.srcObject !== remoteStream) { // Doble seguridad
+                        remoteVideo.srcObject = remoteStream;
+                    }
+                }
+                
+                // Verificar si el track ya está en nuestro remoteStream
+                const existingTrack = remoteStream.getTracks().find(t => t.id === event.track.id);
+                if (!existingTrack) {
+                    log(`  Añadiendo track ${event.track.kind} (id: ${event.track.id}) a remoteStream (id: ${remoteStream.id}).`);
+                    remoteStream.addTrack(event.track);
+                } else {
+                    log(`  Track ${event.track.kind} (id: ${event.track.id}) ya está en remoteStream (id: ${remoteStream.id}).`);
+                }
+                
+                // No es necesario reasignar remoteVideo.srcObject si ya apunta a remoteStream.
+                // El navegador debería actualizar el elemento video automáticamente cuando se añade un track al stream que ya tiene asignado.
+                log(`  remoteStream (id: ${remoteStream.id}) AHORA tiene los siguientes tracks: ${remoteStream.getTracks().map(t => `${t.kind}:${t.id}(readyState:${t.readyState})`).join(', ')}`);
+
+                log("  Intentando remoteVideo.play()...");
+                remoteVideo.play().then(() => {
+                    log("  remoteVideo.play() promesa resuelta.");
+                    setTimeout(() => {
+                        log(`  Estado de remoteVideo (después de play y timeout): paused=${remoteVideo.paused}, ended=${remoteVideo.ended}, networkState=${remoteVideo.networkState}, readyState=${remoteVideo.readyState}, videoWidth=${remoteVideo.videoWidth}, videoHeight=${remoteVideo.videoHeight}`);
+                    }, 100);
+                }).catch(e => {
+                    log(`  Error en remoteVideo.play(): ${e.name} - ${e.message}`);
+                    // Este error es común si el navegador bloquea autoplay, pero 'muted' debería ayudar.
+                    // O si es interrumpido por otra acción.
+                });
+                log(`>>> FIN pc.ontrack para track ${event.track.kind} (id: ${event.track.id}) <<<`);
+            };
+            // --- Fin pc.ontrack REFACTORIZADO ---
+            
+            pc.oniceconnectionstatechange = () => {
+                log(`Estado de conexión ICE: ${pc.iceConnectionState}`);
+                if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                    log("Conexión WebRTC establecida y completada (ICE).");
+                } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'closed') {
+                     log(`WebRTC Desconectado/Fallido: ${pc.iceConnectionState}.`);
+                     if (ws && ws.readyState === WebSocket.OPEN) {
+                         log("Cerrando WebSocket debido a fallo/desconexión de PeerConnection.");
+                         ws.close(1000, "PeerConnection failed or disconnected");
+                     }
+                }
+            };
+
+            try {
+                pc.addTransceiver('video', { direction: 'recvonly' });
+                pc.addTransceiver('audio', { direction: 'recvonly' });
+                log("Transceptores para video y audio configurados para recibir.");
+            } catch (e) {
+                 log(`Error añadiendo transceptores: ${e.name} - ${e.message}`);
+                 alert(`Error configurando transceptores: ${e.message}. Tu navegador podría no soportar esta característica.`);
+                 return;
+            }
+
+            try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                log("Oferta SDP creada y LocalDescription establecida.");
+                if (offer && offer.sdp) {
+                    log(`[CLIENT CREATED SDP OFFER]:\n${offer.sdp}`); 
+                } else {
+                    log("[CLIENT CREATED SDP OFFER]: (offer o offer.sdp es null/undefined)");
+                }
+                
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    log("Enviando oferta SDP al servidor...");
+                    ws.send(JSON.stringify({ type: 'offer', sdp: offer })); // Enviar el objeto offer directamente
+                } else { log("WebSocket no abierto, no se puede enviar oferta SDP."); }
+            } catch (e) {
+                log(`Error creando oferta SDP: ${e.name} - ${e.message}`);
+                alert(`Error creando oferta SDP: ${e.message}.`);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', setupWebSocket);
+    </script>
+</body>
+</html>

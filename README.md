@@ -103,11 +103,8 @@ El servidor se iniciará y esperará conexiones en `http://localhost:8080`. Si u
 Abre tu navegador web y navega a:
 `http://localhost:8080`
 
-<<<<<<< HEAD
 La página `client.html` se cargará. El video no comenzará automáticamente; deberás usar los controles del reproductor para iniciar la reproducción. Múltiples clientes pueden conectarse.
-=======
-La página `client.html` se cargará. El video comenzará automáticamente; deberás usar los controles del reproductor para parar la reproducción. Múltiples clientes pueden conectarse.
->>>>>>> 3e8f19366b6e31b980d1c3574fa40feb402b9adc
+
 
 ## Estructura del Proyecto
 

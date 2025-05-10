@@ -105,7 +105,7 @@ El servidor se iniciará y esperará conexiones en `http://localhost:8080`. Si u
 Abre tu navegador web y navega a:
 `http://localhost:8080`
 
-La página `client.html` se cargará. El video no comenzará automáticamente; deberás usar los controles del reproductor para iniciar la reproducción. Múltiples clientes pueden conectarse.
+La página `client.html` se cargará. El video comenzará automáticamente; deberás usar los controles del reproductor para parar la reproducción. Múltiples clientes pueden conectarse.
 
 ## Estructura del Proyecto
 
@@ -128,32 +128,5 @@ El código está organizado en los siguientes archivos principales:
 
 ## Licencia
 
-Este proyecto está bajo la Licencia [NOMBRE DE TU LICENCIA AQUÍ, ej. MIT]. Ver el archivo `LICENSE` para más detalles.
+Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
 ```
-
----
-
-**Recordatorios antes de subir a GitHub:**
-
-1.  **Reemplaza los placeholders:**
-    *   `TU_USUARIO_GITHUB/TU_REPOSITORIO` con la URL real de tu repositorio.
-    *   `[NOMBRE DE TU LICENCIA AQUÍ, ej. MIT]` con la licencia que elijas.
-2.  **Crea el archivo `LICENSE`** con el texto completo de la licencia elegida.
-3.  **Crea un archivo `.gitignore`** (como se discutió en una respuesta anterior, para ignorar binarios, etc.).
-    Ejemplo básico:
-    ```
-    # Binarios
-    webrtc-streamer
-    *.exe
-    *.out
-
-    # Archivos de IDE/Editor (ejemplos)
-    .vscode/
-    .idea/
-    *.swp
-    *~
-    ```
-4.  Asegúrate de que los archivos `go.mod` y `go.sum` estén presentes y actualizados (`go mod tidy`).
-5.  Asegúrate de que el archivo `client.html` que usas es la versión que quieres subir.
-
-Este `README.md` está más enfocado en cómo un usuario o desarrollador puede empezar a usar y entender tu proyecto rápidamente. ¡Mucha suerte con la subida a GitHub!

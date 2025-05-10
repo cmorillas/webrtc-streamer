@@ -103,7 +103,11 @@ El servidor se iniciará y esperará conexiones en `http://localhost:8080`. Si u
 Abre tu navegador web y navega a:
 `http://localhost:8080`
 
+<<<<<<< HEAD
 La página `client.html` se cargará. El video no comenzará automáticamente; deberás usar los controles del reproductor para iniciar la reproducción. Múltiples clientes pueden conectarse.
+=======
+La página `client.html` se cargará. El video comenzará automáticamente; deberás usar los controles del reproductor para parar la reproducción. Múltiples clientes pueden conectarse.
+>>>>>>> 3e8f19366b6e31b980d1c3574fa40feb402b9adc
 
 ## Estructura del Proyecto
 
@@ -126,6 +130,7 @@ El código está organizado en los siguientes archivos principales:
 
 ## Licencia
 
+<<<<<<< HEAD
 Este proyecto está bajo la Licencia [NOMBRE DE TU LICENCIA AQUÍ, ej. MIT]. Ver el archivo `LICENSE` para más detalles.
 ```
 
@@ -155,3 +160,6 @@ Este proyecto está bajo la Licencia [NOMBRE DE TU LICENCIA AQUÍ, ej. MIT]. Ver
 5.  Asegúrate de que el archivo `client.html` que usas es la versión que quieres subir.
 
 Este `README.md` está más enfocado en cómo un usuario o desarrollador puede empezar a usar y entender tu proyecto rápidamente. ¡Mucha suerte con la subida a GitHub!
+=======
+Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
+```
